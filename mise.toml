@@ -2,6 +2,7 @@
 MISE_USE_VERSIONS_HOST = "0"
 
 [tools]
+"ubi:spinel-coop/rv" = "latest"
 actionlint = "latest"
 hk = "latest"
 lua = "5.4"

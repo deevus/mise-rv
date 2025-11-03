@@ -3,40 +3,73 @@
 set -euo pipefail
 
 # Link the plugin for testing
-mise plugin link --force <BACKEND> .
+mise plugin link --force rv .
 
 # Clear cache to ensure fresh testing
 mise cache clear
 
-# Test that the plugin can list tools (this should work even if no tools are available)
-echo "Testing plugin linking and basic functionality..."
+echo "Testing mise-rv backend plugin..."
+echo "=================================="
 
-# Try to list available versions for a test tool
-# Note: This will likely fail until you implement the backend methods
-# Replace <TEST_TOOL> with a real tool name your backend supports
-TEST_TOOL="<TEST_TOOL>"
+# Test tool name - we only support "ruby"
+TEST_TOOL="ruby"
+TEST_VERSION="3.3.9"
 
-echo "Testing version listing for ${TEST_TOOL}..."
-if mise ls-remote <BACKEND>:${TEST_TOOL} 2>/dev/null; then
-    echo "✓ Version listing works"
+# Test 1: Version listing
+echo ""
+echo "Test 1: Version listing"
+echo "-----------------------"
+if mise ls-remote rv:${TEST_TOOL} | grep -q "${TEST_VERSION}"; then
+    echo "✓ Version listing works (found ${TEST_VERSION})"
 else
-    echo "⚠ Version listing failed - implement backend_list_versions.lua for your backend"
+    echo "✗ Version listing failed - ${TEST_VERSION} not found"
+    exit 1
 fi
 
-# Test installation if versions are available
-echo "Testing installation..."
-if mise install <BACKEND>:${TEST_TOOL}@latest 2>/dev/null; then
+# Test 2: Installation
+echo ""
+echo "Test 2: Installation"
+echo "--------------------"
+if mise install rv:${TEST_TOOL}@${TEST_VERSION}; then
     echo "✓ Installation works"
-    
-    # Test that the tool can be executed
-    if mise exec <BACKEND>:${TEST_TOOL}@latest -- ${TEST_TOOL} --version 2>/dev/null; then
-        echo "✓ Tool execution works"
-    else
-        echo "⚠ Tool execution failed - check backend_exec_env.lua implementation"
-    fi
 else
-    echo "⚠ Installation failed - implement backend_install.lua for your backend"
+    echo "✗ Installation failed"
+    exit 1
 fi
 
-echo "✓ Basic plugin structure tests completed"
-echo "Note: Replace <TEST_TOOL> with a real tool and implement the backend methods"
+# Test 3: Ruby execution
+echo ""
+echo "Test 3: Ruby execution"
+echo "----------------------"
+if mise exec rv:${TEST_TOOL}@${TEST_VERSION} -- ruby --version | grep -q "ruby ${TEST_VERSION}"; then
+    echo "✓ Ruby execution works"
+else
+    echo "✗ Ruby execution failed"
+    exit 1
+fi
+
+# Test 4: Gem environment
+echo ""
+echo "Test 4: Gem environment"
+echo "-----------------------"
+if mise exec rv:${TEST_TOOL}@${TEST_VERSION} -- gem env | grep -q "GEM PATHS"; then
+    echo "✓ Gem environment configured"
+else
+    echo "✗ Gem environment not configured properly"
+    exit 1
+fi
+
+# Test 5: Gem installation
+echo ""
+echo "Test 5: Gem installation"
+echo "------------------------"
+if mise exec rv:${TEST_TOOL}@${TEST_VERSION} -- gem install json --no-document 2>&1 | grep -q "Successfully installed"; then
+    echo "✓ Gem installation works"
+else
+    echo "✗ Gem installation failed"
+    exit 1
+fi
+
+echo ""
+echo "=================================="
+echo "✓ All tests passed!"

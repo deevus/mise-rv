@@ -10,75 +10,48 @@ function PLUGIN:BackendListVersions(ctx)
         error("Tool name cannot be empty")
     end
 
-    -- Example implementations (choose/modify based on your backend):
+    -- Only support "ruby" as the tool name
+    if tool ~= "ruby" then
+        error("mise-rv backend only supports 'ruby' as the tool name. Use: rv:ruby@version")
+    end
 
-    -- Example 1: API-based version listing (like npm, pip, cargo)
-    local http = require("http")
+    -- Get available Ruby versions from rv
+    local cmd = require("cmd")
     local json = require("json")
 
-    -- Replace with your backend's API endpoint
-    local api_url = "https://api.<BACKEND>.org/packages/" .. tool .. "/versions"
-
-    local resp, err = http.get({
-        url = api_url,
-        -- headers = { ["Authorization"] = "Bearer " .. token } -- if needed
-    })
+    -- Execute rv ruby list with JSON output
+    local result, err = cmd.exec("rv ruby list --format json")
 
     if err then
-        error("Failed to fetch versions for " .. tool .. ": " .. err)
+        error("Failed to execute rv command. Is rv installed? Error: " .. err)
     end
 
-    if resp.status_code ~= 200 then
-        error("API returned status " .. resp.status_code .. " for " .. tool)
+    -- Parse JSON response
+    local success, data = pcall(json.decode, result)
+    if not success then
+        error("Failed to parse rv output: " .. tostring(data))
     end
 
-    local data = json.decode(resp.body)
-    local versions = {}
+    -- Extract and deduplicate versions
+    -- rv returns entries for each platform/arch combo, we just want unique version strings
+    local versions_set = {}
 
-    -- Parse versions from API response (adjust based on your API structure)
-    if data.versions then
-        for _, version in ipairs(data.versions) do
-            table.insert(versions, version)
+    for _, entry in ipairs(data) do
+        if entry.version then
+            -- Strip "ruby-" prefix (e.g., "ruby-3.3.9" -> "3.3.9")
+            local version = entry.version:gsub("^ruby%-", "")
+            versions_set[version] = true
         end
     end
 
-    -- Example 2: Command-line based version listing
-    --[[
-    local cmd = require("cmd")
-
-    -- Replace with your backend's command to list versions
-    local command = "<BACKEND> search " .. tool .. " --versions"
-    local result = cmd.exec(command)
-
-    if not result or result:match("error") then
-        error("Failed to fetch versions for " .. tool)
-    end
-
+    -- Convert set to array
     local versions = {}
-    -- Parse command output to extract versions
-    for version in result:gmatch("[%d%.]+[%w%-]*") do
+    for version, _ in pairs(versions_set) do
         table.insert(versions, version)
     end
-    --]]
-
-    -- Example 3: Registry file parsing
-    --[[
-    local file = require("file")
-
-    -- Replace with path to your backend's registry or manifest
-    local registry_path = "/path/to/<BACKEND>/registry/" .. tool .. ".json"
-
-    if not file.exists(registry_path) then
-        error("Tool " .. tool .. " not found in registry")
-    end
-
-    local content = file.read(registry_path)
-    local data = json.decode(content)
-    local versions = data.versions or {}
-    --]]
 
     if #versions == 0 then
-        error("No versions found for " .. tool)
+        error("No Ruby versions found from rv")
     end
 
     return { versions = versions }

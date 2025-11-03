@@ -7,76 +7,42 @@ function PLUGIN:BackendExecEnv(ctx)
     local tool = ctx.tool
     local version = ctx.version
 
-    -- Basic PATH setup (most common case)
+    -- Validate inputs
+    if not install_path or install_path == "" then
+        error("Install path cannot be empty")
+    end
+    if not version or version == "" then
+        error("Version cannot be empty")
+    end
+
+    -- rv installs Ruby into a ruby-{version} subdirectory
     local file = require("file")
-    local bin_path = file.join_path(install_path, "bin")
+    local ruby_root = file.join_path(install_path, "ruby-" .. version)
+    local bin_path = file.join_path(ruby_root, "bin")
 
     local env_vars = {
         -- Add tool's bin directory to PATH
         { key = "PATH", value = bin_path },
     }
 
-    -- Example: Tool-specific environment variables
-    --[[
-    -- Add tool-specific home directory
-    table.insert(env_vars, {
-        key = tool:upper() .. "_HOME",
-        value = install_path
-    })
+    -- Set up GEM_HOME and GEM_PATH for proper gem isolation
+    -- Ruby gem path uses major.minor.0 format (e.g., 3.3.9 -> 3.3.0)
+    local major, minor = version:match("^(%d+)%.(%d+)")
 
-    -- Add version environment variable
-    table.insert(env_vars, {
-        key = tool:upper() .. "_VERSION",
-        value = version
-    })
+    if major and minor then
+        local gem_version = major .. "." .. minor .. ".0"
+        local gem_path = file.join_path(ruby_root, "lib", "ruby", "gems", gem_version)
 
-    -- Add configuration directory
-    table.insert(env_vars, {
-        key = tool:upper() .. "_CONFIG",
-        value = file.join_path(install_path, "config")
-    })
-    --]]
+        table.insert(env_vars, {
+            key = "GEM_HOME",
+            value = gem_path,
+        })
 
-    -- Example: Backend-specific paths (like node_modules for npm)
-    --[[
-    -- For npm-like backends that install to subdirectories
-    local modules_bin = file.join_path(install_path, "node_modules", ".bin")
-    table.insert(env_vars, {key = "PATH", value = modules_bin})
-
-    -- For Python-like backends with site-packages
-    local site_packages = file.join_path(install_path, "lib", "python3.x", "site-packages")
-    table.insert(env_vars, {key = "PYTHONPATH", value = site_packages})
-
-    -- For Rust-like backends with cargo binaries
-    local cargo_bin = file.join_path(install_path, ".cargo", "bin")
-    table.insert(env_vars, {key = "PATH", value = cargo_bin})
-    --]]
-
-    -- Example: Library paths for compiled tools
-    --[[
-    local lib_path = file.join_path(install_path, "lib")
-    local lib64_path = file.join_path(install_path, "lib64")
-
-    if RUNTIME.osType == "Linux" then
-        table.insert(env_vars, {key = "LD_LIBRARY_PATH", value = lib_path})
-        table.insert(env_vars, {key = "LD_LIBRARY_PATH", value = lib64_path})
-    elseif RUNTIME.osType == "Darwin" then
-        table.insert(env_vars, {key = "DYLD_LIBRARY_PATH", value = lib_path})
+        table.insert(env_vars, {
+            key = "GEM_PATH",
+            value = gem_path,
+        })
     end
-    --]]
-
-    -- Example: Include paths for development tools
-    --[[
-    local include_path = file.join_path(install_path, "include")
-    table.insert(env_vars, {key = "C_INCLUDE_PATH", value = include_path})
-    table.insert(env_vars, {key = "CPLUS_INCLUDE_PATH", value = include_path})
-    --]]
-
-    -- Example: Manual pages path
-    --[[
-    local man_path = file.join_path(install_path, "share", "man")
-    table.insert(env_vars, {key = "MANPATH", value = man_path})
-    --]]
 
     return {
         env_vars = env_vars,
